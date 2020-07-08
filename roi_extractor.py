@@ -62,6 +62,7 @@ class DTSRoIExtractor(object):
 
         if not use_history:
             self.save_info(roi_boxes, metas, image_dir)
+            plot_rois(image, roi_boxes)
 
         return rois
 
@@ -70,7 +71,6 @@ class DTSRoIExtractor(object):
             chart_corners = self.select_charts(image)
             roi_boxes = self.corners2rois(chart_corners)
             roi_boxes = self.sort_rois(image, roi_boxes)
-            plot_rois(image, roi_boxes)
 
         rois = self.extract_rois(image, roi_boxes)
         return rois, roi_boxes

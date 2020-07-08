@@ -9,10 +9,11 @@ def plot_rois(image, roi_boxes):
     """
     :param image:
     :param roi_boxes: dict(patch_id: np.ndarray(4,) or None)
+    :param save_dir:
     :return:
     """
     fig, ax = plt.subplots()
-    fig.canvas.set_window_title('My Window Title')
+    fig.canvas.set_window_title('Close figure to continue')
     ax.imshow(image.astype(np.float32) / image.max())
     for patch_id, box in roi_boxes.items():
         if box is None:
