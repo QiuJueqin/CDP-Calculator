@@ -12,19 +12,18 @@ from utils.config import load_config
 
 
 def main():
-    max_luminance = 42000
-    num_images = 8
+    max_luminance = 50000
+    num_images = 2
     simulated_images_dir = './simulation/simulated_images'
     os.makedirs(simulated_images_dir, exist_ok=True)
-
-    cfg = load_config('./utils/configurations/simulated_camera_24bit.cfg')
-    camera = SimulatedCamera(cfg)
 
     dts_luminance = generate_dts_luminance(max_luminance=max_luminance)
     dts_luminance_map = generate_dts_luminance_map(dts_luminance)
 
+    cfg = load_config('./utils/configurations/simulated_camera_24bit.cfg')
+    camera = SimulatedCamera(cfg)
     for i in range(num_images):
-        image = camera.capture_hdr(dts_luminance_map, f_num=8, exposure_time=0.001, iso=100, frames=3, ev_step=4)
+        image = camera.capture_hdr(dts_luminance_map, f_num=8, exposure_time=0.001, iso=125, frames=3, ev_step=4)
         image = camera.tone_mapping(image)
         save_path = os.path.join(simulated_images_dir, 'simulated_image_{}.tiff'.format(i))
         tifffile.imwrite(save_path, image)
@@ -32,9 +31,9 @@ def main():
     extractor = DTSRoIExtractor(cfg)
     rois = extractor.extract_images(simulated_images_dir)
 
-    calculator = CDPCalculator(dts_luminance, rois)
-    p = calculator.calculate(fig_dir=simulated_images_dir)
-    p = calculator.calculate([], fig_dir=simulated_images_dir)
+    calculator = CDPCalculator(dts_luminance, rois, fig_dir=simulated_images_dir)
+    calculator.calculate()
+    calculator.calculate_all()
 
 
 if __name__ == '__main__':

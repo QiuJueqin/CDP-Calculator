@@ -128,7 +128,7 @@ class DTSRoIExtractor(object):
                 fig.canvas.draw()
 
         fig.canvas.mpl_connect('button_press_event', onclick)
-        plt.show()
+        plt.draw()
 
         chart_corners = np.array(chart_corners)
         self.num_charts = chart_corners.shape[0] // 4
@@ -220,7 +220,7 @@ class DTSRoIExtractor(object):
             plt.text((box[0] + box[2]) // 2, (box[1] + box[3]) // 2, str(patch_id),
                      horizontalalignment='center', verticalalignment='center'
                      )
-        plt.show()
+        plt.draw()
 
     def save_info(self, roi_boxes, metas, image_dir):
         info = {'chart_ids': self.chart_ids,
@@ -243,7 +243,9 @@ class DTSRoIExtractor(object):
 
         assert rois_info['chart_ids'] == list(self.chart_ids), \
             'Chart IDs changed. Delete historical files or use ignore_exist=True to override them.'
-        rois_info['roi_boxes'] = {i: None if b is None else np.array(b) for i, b in rois_info['roi_boxes'].items()}
+        rois_info['roi_boxes'] = {
+            int(i): None if b is None else np.array(b) for i, b in rois_info['roi_boxes'].items()
+        }
 
         print('Loaded historical RoI info from {}.'.format(max(rois_files)))
 

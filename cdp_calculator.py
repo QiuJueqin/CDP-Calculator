@@ -10,94 +10,109 @@ EPSILON = 1E-9
 
 
 class CDPCalculator(object):
-    def __init__(self,
-                 dts_luminance,
-                 rois,
-                 method='michelson',
-                 chart_ids=(0, 1, 2, 3, 4, 5),
-                 num_randomized_pixels=200000):
+    def __init__(self, dts_luminance, rois, method='michelson', num_samples=100000, fig_dir=''):
         """
         :param dts_luminance: dict(patch_id: float)
-        :param rois: dict(patch_id: np.ndarray(h, w, 3) or none),
-        where h and w are height and width of each image roi.
-        :param cfg:
-        :param chart_ids: a 0-indexed list to indicate which charts are included in 'rois',
-        for example, use chart_ids = [0, 1, 2, 3] to exclude two darkest charts.
-                                     """
+        :param rois: dict(patch_id: np.ndarray(h, w, 3) or none), where h and w are
+            height and width of each RoI
+        :param method: contrast metric: 'michelson' | 'weber'
+        :param num_samples: number of randomly-sampled pixel pairs for generating
+            distribution from which CDP is calculated. Larger number results in more
+            accurate calculation. (>50000 is recommended)
+        :param fig_dir: directory to save the figures. If empty, figures will be
+            interactively shown on the screen
+        """
         self.dts_luminance = dts_luminance
         self.rois = rois
         self.method = method
-        self.chart_ids = chart_ids
+        self.num_randomized_pixels = num_samples
+        self.fig_dir = fig_dir
+
         self.paired_luminance = []
         self.paired_contrasts = []
-        self.rois_brighter = []
-        self.rois_darker = []
+        self.brighter_rois = []
+        self.darker_rois = []
         self.interp = None
-        self.num_randomized_pixels = num_randomized_pixels
+
         self.init()
 
-    def calculate(self,
-                  target_contrasts=(0.06, 0.1, 0.35),
-                  confidence=0.5,
-                  contrast_tol=0.1,
-                  fig_dir=''):
+    def calculate(self, target_contrasts=(0.06, 0.1, 0.2, 0.35), confidence=0.5, contrast_tol=0.05):
         """
         Calculate CDPs w.r.t. luminance given target contrast value(s)
-        :param target_contrasts: float or list, target contrast(s) for which the cdp is calculated.
-        if given a empty list, CDPs will be calculated for all input contrast and luminance combinations.
-        :param confidence: the confidence interval for the measurement of the cdp
-        :param contrast_tol: the contrast range for which the cdp is calculated
-        :param fig_dir: directory to save the visualization results
-        :return:
+        :param target_contrasts: float or list, target contrast(s) for which the CDP
+            is calculated
+        :param confidence: the confidence interval for the calculation of CDP
+        :param contrast_tol: contrast tolerance. All RoI pairs in a range of contrasts
+            (target_contrast ± tolerance) will be employed to calculate CDP
         """
         if isinstance(target_contrasts, (float, int)):
             target_contrasts = [target_contrasts]
-
-        if not target_contrasts:
-            target_contrasts = self.paired_contrasts
-            plot_mode = '3d'
-        else:
-            target_contrasts = np.array(target_contrasts)
-            plot_mode = '2d'
+        target_contrasts = np.asarray(target_contrasts)
 
         input_contrasts, input_luminance, cdps = [], [], []
-        print('Calculating CDPs for {} input contrasts...'.format(len(target_contrasts)))
-        for idx, c in enumerate(tqdm.tqdm(target_contrasts)):
-            if plot_mode == '2d':
-                # find all input contrasts within a small range centering at the target contrast
-                indices = np.where(
-                    (self.paired_contrasts >= (1 - contrast_tol) * c) *
-                    (self.paired_contrasts <= (1 + contrast_tol) * c)
-                )[0]
-                if len(indices) == 0:
-                    raise ValueError('RoI pair can not be found for the target contrast {}.'.format(c))
-            else:
-                indices = [idx]
+        for c in target_contrasts:
+            print('Calculating CDPs for input contrast {:.0f}%...'.format(100*c))
+            # find all input contrasts within a small range centering at the target contrast
+            indices = np.where(
+                (self.paired_contrasts >= (1 - contrast_tol) * c) *
+                (self.paired_contrasts <= (1 + contrast_tol) * c)
+            )[0]
+            if len(indices) == 0:
+                raise ValueError('RoI pair can not be found for the target contrast {}.'.format(c))
 
+            input_contrasts.append([c] * indices.size)
+            input_luminance.append(self.paired_luminance[indices])
             for i in indices:
-                input_contrasts.append(self.paired_contrasts[i] if plot_mode == '3d' else c)
-                input_luminance.append(self.paired_luminance[i])
-                roi_contrasts = calc_contrast(self.inverse_transform(self.rois_brighter[i]),
-                                              self.inverse_transform(self.rois_darker[i]),
+                roi_contrasts = calc_contrast(self.inverse_transform(self.brighter_rois[i]),
+                                              self.inverse_transform(self.darker_rois[i]),
                                               method=self.method,
                                               mode='pairwise')
                 p = sum(roi_contrasts < (1 + confidence) * c) - sum(roi_contrasts < (1 - confidence) * c)
                 cdps.append(p / roi_contrasts.size)
 
-        input_contrasts = np.array(input_contrasts)
-        input_luminance = np.array(input_luminance)
+        input_contrasts = np.hstack(input_contrasts)
+        input_luminance = np.hstack(input_luminance)
         cdps = np.array(cdps)
 
-        if plot_mode == '3d':
-            visualize_cdp_3d(input_contrasts, input_luminance, cdps, fig_dir)
-        else:
-            visualize_cdp_2d(input_contrasts, input_luminance, cdps, fig_dir)
+        visualize_cdp_2d(input_contrasts, input_luminance, cdps, self.fig_dir)
 
-        return [{'input_contrast': c,
-                 'input_luminance': l,
-                 'cdp': cdp} for c, l, cdp in zip(input_contrasts, input_luminance, cdps)]
+        result = [{'input_contrast': c, 'input_luminance': l, 'cdp': cdp} for c, l, cdp in zip(
+            input_contrasts, input_luminance, cdps
+        )]
+        return result
+
+    def calculate_all(self, confidence=0.5):
+        """
+        Calculate CDPs for all possible RoI pairs. Each RoI pair, e.g. B(righter) and
+            D(arker), will generate one input contrast value: B/D-1 or (B-D)/(B+D),
+            one luminance value: (B+D)/2, and one CDP value. For a test chart that
+            contains N patches with different luminance levels, there exist (N*(N-1))/2
+            RoI pairs
+        :param confidence: the confidence interval for the calculation of CDP
+        """
+        print('Calculating CDPs for {} input contrast levels...'.format(len(self.paired_contrasts)))
+
+        cdps = []
+        for i, c in enumerate(tqdm.tqdm(self.paired_contrasts)):
+            roi_contrasts = calc_contrast(self.inverse_transform(self.brighter_rois[i]),
+                                          self.inverse_transform(self.darker_rois[i]),
+                                          method=self.method,
+                                          mode='pairwise')
+            p = sum(roi_contrasts < (1 + confidence) * c) - sum(roi_contrasts < (1 - confidence) * c)
+            cdps.append(p / roi_contrasts.size)
+
+        cdps = np.array(cdps)
+
+        visualize_cdp_3d(self.paired_contrasts, self.paired_luminance, cdps, self.fig_dir)
+
+        result = [{'input_contrast': c, 'input_luminance': l, 'cdp': cdp} for c, l, cdp in zip(
+            self.paired_contrasts, self.paired_luminance, cdps
+        )]
+        return result
 
     def init(self):
+        """ Prepare transforming pixel values back to luminance domain,
+            and generate all possible RoI pairs """
         num_images = 0
         # discard charts that not been annotated
         for patch_id, roi in self.rois.items():
@@ -113,8 +128,11 @@ class CDPCalculator(object):
         # interpolation
         dts_luminance = np.array([v for v in self.dts_luminance.values() if v is not None])
         rois = [v for v in self.rois.values() if v is not None]
-        mean_patch_values = [np.mean(r) for r in rois]
-        self.interp = interp1d(mean_patch_values, dts_luminance,
+        mean_patch_values = np.array([np.mean(r) for r in rois])
+
+        unique_mean_patch_values, unique_indices = np.unique(mean_patch_values, return_index=True)
+        unique_dts_luminance = dts_luminance[unique_indices]
+        self.interp = interp1d(unique_mean_patch_values, unique_dts_luminance,
                                kind='quadratic', fill_value='extrapolate')
         plot_luminance(mean_patch_values, dts_luminance)
 
@@ -133,12 +151,13 @@ class CDPCalculator(object):
         # generate all possible contrasts from RoI pairs
         print('Generating {} RoI pairs...'.format(indices_b.size))
         num_roi_pixels = int(np.sqrt(self.num_randomized_pixels))
-        self.rois_brighter = tuple(
+        self.brighter_rois = tuple(
             np.random.choice(rois[i].ravel(), num_roi_pixels, replace=False) for i in indices_b
         )
-        self.rois_darker = tuple(
+        self.darker_rois = tuple(
             np.random.choice(rois[i].ravel(), num_roi_pixels, replace=False) for i in indices_d
         )
 
     def inverse_transform(self, pixel_values):
+        """ Transform pixel values back to luminance domain """
         return np.clip(self.interp(pixel_values), 0, None)
