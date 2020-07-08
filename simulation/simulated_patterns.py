@@ -108,7 +108,7 @@ def visualize(image, vmax=None, vmin=None):
     fig, ax = plt.subplots(figsize=(8, 6))
     im = ax.imshow(image, cmap='gray', norm=Normalize(vmin=vmax, vmax=vmin, clip=True))
     fig.colorbar(im, ax=ax)
-    plt.show()
+    plt.show(block=False)
 
 
 def test():

@@ -194,7 +194,7 @@ def test():
               'luminance': 1000, 'f_num': 8, 'exposure_time': 0.005}
     unit_test(cfg, inputs)
 
-    plt.show()
+    plt.show(block=False)
 
 
 if __name__ == '__main__':

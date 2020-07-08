@@ -9,9 +9,9 @@ import cv2
 import skimage.io
 import tifffile
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
 
 from utils.config import load_config
+from utils.visualization import plot_rois
 from utils.misc import rgb2luminance, NumpyEncoder
 
 
@@ -70,7 +70,7 @@ class DTSRoIExtractor(object):
             chart_corners = self.select_charts(image)
             roi_boxes = self.corners2rois(chart_corners)
             roi_boxes = self.sort_rois(image, roi_boxes)
-            self.plot_rois(image, roi_boxes)
+            plot_rois(image, roi_boxes)
 
         rois = self.extract_rois(image, roi_boxes)
         return rois, roi_boxes
@@ -128,7 +128,7 @@ class DTSRoIExtractor(object):
                 fig.canvas.draw()
 
         fig.canvas.mpl_connect('button_press_event', onclick)
-        plt.show()
+        plt.show(block=False)
 
         chart_corners = np.array(chart_corners)
         self.num_charts = chart_corners.shape[0] // 4
@@ -203,24 +203,6 @@ class DTSRoIExtractor(object):
                 roi_boxes_sorted[i] = None
         return roi_boxes_sorted
 
-    def plot_rois(self, image, roi_boxes):
-        """
-        :param image:
-        :param roi_boxes: dict(patch_id: np.ndarray(4,) or None)
-        :return:
-        """
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        ax.imshow(image.astype(np.float32) / self.max_value)
-        for patch_id, box in roi_boxes.items():
-            if box is None:
-                continue
-            ax.add_patch(Rectangle((box[0], box[1]), box[2] - box[0], box[3] - box[1],
-                                   fc='None', ec='r', lw=3))
-            plt.text((box[0] + box[2]) // 2, (box[1] + box[3]) // 2, str(patch_id),
-                     horizontalalignment='center', verticalalignment='center'
-                     )
-        plt.show()
 
     def save_info(self, roi_boxes, metas, image_dir):
         info = {'chart_ids': self.chart_ids,
@@ -243,7 +225,9 @@ class DTSRoIExtractor(object):
 
         assert rois_info['chart_ids'] == list(self.chart_ids), \
             'Chart IDs changed. Delete historical files or use ignore_exist=True to override them.'
-        rois_info['roi_boxes'] = {i: None if b is None else np.array(b) for i, b in rois_info['roi_boxes'].items()}
+        rois_info['roi_boxes'] = {
+            int(i): None if b is None else np.array(b) for i, b in rois_info['roi_boxes'].items()
+        }
 
         print('Loaded historical RoI info from {}.'.format(max(rois_files)))
 
