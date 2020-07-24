@@ -43,7 +43,7 @@ def generate_dts_luminance_map(dts_luminance, ambient_luminance=1E-4, reflectanc
     :return:
     """
     dts_luminance_map = ambient_luminance * np.ones(image_size, dtype=np.float32)
-    patch_size = min(image_size) // 32
+    patch_size = min(image_size) // 30
     chart_size = patch_size * 6
     chart_centers = [[0.15, 0.2],
                      [0.5, 0.2],

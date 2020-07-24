@@ -1,97 +1,107 @@
-import os
+import os.path as op
 import time
-import glob
 import json
+from glob import glob
 
-import tqdm
 import numpy as np
 import cv2
-import skimage.io
 import tifffile
 import matplotlib.pyplot as plt
+import skimage.io
+from skimage.draw import polygon
 
-from utils.config import load_config
-from utils.visualization import plot_rois
+from utils.visualization import plot_rois, ChartSelector
 from utils.misc import rgb2luminance, NumpyEncoder
 
 
 class DTSRoIExtractor(object):
-    def __init__(self, cfg, chart_ids=(0, 1, 2, 3, 4, 5), ignore_exist=False):
-        """
-        :param cfg:
-        :param chart_ids: a 0-indexed list to indicate which charts are included in 'rois',
-        for example, use chart_ids = [0, 1, 2, 3] to exclude two darkest charts.
-        :param ignore_exist: force to override existing rois from historical experiments
-        """
+    def __init__(self, cfg):
         self.cfg = cfg
-        self.chart_ids = chart_ids
-        self.ignore_exist = ignore_exist
-        self.num_charts = 0
-        self.max_value = float(2 ** cfg.output_bit_depth - 1)
 
-        self.dtype = np.uint8 if cfg.output_bit_depth <= 8 else \
-            np.uint16 if cfg.output_bit_depth <= 16 else np.uint32
+        if cfg.output_bit_depth <= 8:
+            self.dtype = np.uint8
+        elif cfg.output_bit_depth <= 16:
+            self.dtype = np.uint16
+        else:
+            self.dtype = np.uint32
 
-        # reference square w.r.t. which the perspective transformation is calculated
-        self.corners_ref = np.array([[0, 0], [1, 0], [0, 1], [1, 1]], dtype=np.float32)  # [lt, rt, lb, rb] in [x, y]
+        # chart size and chart center coordinates in xy format, both relative to image size
+        self.chart_size = 0.2
+        self.chart_centers = np.array([[0.15, 0.2], [0.5, 0.2], [0.85, 0.2],
+                                       [0.15, 0.8], [0.5, 0.8], [0.85, 0.8]])
+
+        # corners of a reference chart, in xy format and [lt, rt, lb, rb] order
+        self.ref_chart_corners = np.array([[0, 0], [1, 0], [0, 1], [1, 1]], dtype=np.float32)
         cx, cy = np.meshgrid(np.linspace(0, 1, 13, dtype=np.float32)[1:-1:2],
                              np.linspace(0, 1, 13, dtype=np.float32)[1:-1:2])
-        self.roi_centers_ref = np.stack([cx.flatten(order='f'), cy.flatten(order='f')], axis=1).reshape((-1, 1, 2))
+        # add an extra dimension to match cv2.perspectiveTransform input format
+        self.ref_roi_centers = np.stack([cy.ravel(), cx.ravel()]).T.reshape(-1, 1, 2)
 
-    def extract_images(self, image_dir):
+        # determine if the image should be flipped
+        self.flip_x, self.flip_y = False, False
+
+    def extract_images(self, image_dir, ignore_exist=False, ignore_variance_check=False):
+        """
+        Extract RoIs from images with DTS patterns
+        :param image_dir: directory of images
+        :param ignore_exist: force to ignore the existing RoIs files in the directory
+            and re-run the chart selection procedure, otherwise, the program will
+            automatically find if there are historical RoIs files in the directory.
+        :param ignore_variance_check: by default this function will check the variance
+            among images before running RoIs extraction, set this option to True to
+            bypass this procedure. A large variance among set of images generally
+            means that there was fluctuation during capturing, which degrades the
+            accuracy of CDP calculation.
+        :return: dict(patch_id: roi)
+        """
         roi_boxes, rois = None, None
-        metas = []
-        image_paths = glob.glob(os.path.join(image_dir, '*.{}'.format(self.cfg.format)))
+        image_paths = glob(op.join(image_dir, '*.{}'.format(self.cfg.format)))
 
-        # check if there is historical RoIs info file
-        rois_info = None if self.ignore_exist else self.load_history(image_dir)
-        use_history = (rois_info is not None)
-        roi_boxes = rois_info['roi_boxes'] if use_history else None
+        # check if there exists a historical RoIs info file
+        exists = False
+        roi_boxes = self.load_rois(image_dir)
+        if not ignore_exist and (roi_boxes is not None):
+            exists = True
 
-        for image_path in tqdm.tqdm(image_paths):
-            image = self.imread(image_path)
-            metas.append({'image_id': os.path.basename(image_path)})
+        images = []
+        for image_path in image_paths:
+            images.append(self.imread(image_path))
+
+        if not ignore_variance_check:
+            self.check_images_variance(images)
+
+        for image in images:
             rois_cur_image, roi_boxes = self.extract_image(image, roi_boxes)
             if rois is None:
                 rois = rois_cur_image
-            else:
-                for patch_id, roi in rois.items():
-                    rois[patch_id] = np.concatenate(
-                        [rois[patch_id], rois_cur_image[patch_id]], axis=0
-                    ) if roi is not None else None
+                continue
 
-        if not use_history:
-            self.save_info(roi_boxes, metas, image_dir)
+            for patch_id, roi in rois.items():
+                rois[patch_id] = np.concatenate(
+                    [rois[patch_id], rois_cur_image[patch_id]], axis=0
+                )
+
+        if not exists:
+            self.save_rois(roi_boxes, image_dir)
             plot_rois(image, roi_boxes)
 
         return rois
 
     def extract_image(self, image, roi_boxes=None):
+        """
+        Extract RoIs from one single image
+        :param image:
+        :param roi_boxes: if None, user will be asked to manually select corners of 6
+            DTS charts in the image, otherwise, the selected RoI coordinates from the
+            previous frame will be reused
+        """
         if roi_boxes is None:
-            chart_corners = self.select_charts(image)
-            roi_boxes = self.corners2rois(chart_corners)
-            roi_boxes = self.sort_rois(image, roi_boxes)
+            charts_corners = self.annotate_charts(image)
+            charts_corners = self.sort_charts(image, charts_corners)
+            roi_boxes = self.charts_to_rois(charts_corners.astype(np.float32))
 
         rois = self.extract_rois(image, roi_boxes)
         return rois, roi_boxes
-
-    @staticmethod
-    def extract_rois(image, roi_boxes):
-        """
-        extract pixel values from image given roi coordinates.
-        :param image:
-        :param roi_boxes: dict(patch_id: np.ndarray(4,) or None)
-        :return: dict(patch_id: roi or None)
-        """
-        rois = {}
-        for patch_id, box in roi_boxes.items():
-            if box is not None:
-                box = box.astype(np.uint16)
-                roi = rgb2luminance(image[box[1]: box[3], box[0]: box[2], :])
-                rois[patch_id] = np.expand_dims(roi, axis=0)  # add a 'batch' dim
-            else:
-                rois[patch_id] = None
-        return rois
 
     def imread(self, file_path):
         if self.cfg.format == 'tiff':
@@ -99,159 +109,161 @@ class DTSRoIExtractor(object):
         elif self.cfg.format in ('jpg', 'png', 'bmp'):
             image = skimage.io.imread(file_path).astype(self.dtype)
         else:
-            raise IOError('{} format is not supported.'.format(self.cfg.format))
+            raise IOError('currently {} format is not supported.'.format(self.cfg.format))
 
-        if image.ndim == 2:  # H*W case
+        if image.ndim == 2:  # (H, W) case
             image = np.stack((image, ) * 3, axis=-1)
-        elif image.shape[2] == 1:  # H*W*1 case
+        elif image.shape[2] == 1:  # (H, W, 1) case
             image = np.tile(image, (1, 1, 3))
 
-        return image  # np.ndarray(H, W, 3)
+        return image  # (H, W, 3)
 
-    def select_charts(self, image):
+    def annotate_charts(self, image):
         """
-        Allow user to manually select corners of each chart
+        Ask user to manually select DTS charts by RIGHT clicking chart corners
+            (left clicking is kept for image zooming and dragging)
         :param image:
-        :return: corner coordinates of charts: np.ndarray(n * 4, 2),
-        where n is the number of charts and each row is in [x, y] format
+        :return: np.ndarray(24, 2), coordinates of 24 corners in xy format
         """
-        chart_corners = []
-        # (x, y) format
-        fig = plt.figure('Right click corners of all target charts.')
-        plt.imshow(image.astype(np.float32) / self.max_value)
+        height, width, _ = image.shape
 
-        def onclick(event):
-            if event.button == 3:  # right click
-                chart_corners.append([int(event.xdata), int(event.ydata)])
-                c = plt.Circle((event.xdata, event.ydata), 5, color='r')
-                plt.gcf().gca().add_artist(c)
-                fig.canvas.draw()
-
-        fig.canvas.mpl_connect('button_press_event', onclick)
-        plt.show(block=False)
-
-        chart_corners = np.array(chart_corners)
-        self.num_charts = chart_corners.shape[0] // 4
-        assert chart_corners.shape[1] == 2 and chart_corners.shape[0] % 4 == 0
-        assert self.num_charts >= len(self.chart_ids), \
-            'specified {} charts, but only {} are annotated.'.format(
-                len(self.chart_ids), self.num_charts
+        fig, ax = plt.subplots()
+        plt.get_current_fig_manager().window.state('zoomed')
+        ax.imshow(image.astype(np.float32) / image.max())
+        ax.set_title('Drag red corners to locate DTS charts. Close to continue.')
+        chart_selectors = []
+        for i in range(len(self.chart_centers)):
+            chart_selectors.append(
+                ChartSelector(ax,
+                              chart_center=(self.chart_centers[i, 0] * width, self.chart_centers[i, 1] * height),
+                              chart_size=(self.chart_size * height, self.chart_size * height))
             )
 
-        return chart_corners
+        plt.show()
+        corners = []
+        for i in range(len(chart_selectors)):
+            corners.append(chart_selectors[i].vertices)
+            chart_selectors[i].disconnect()
 
-    def corners2rois(self, corners):
+        return np.array(corners).reshape(-1, 2)
+
+    def sort_charts(self, image, charts_corners):
         """
-        calculate bbox coordinates of patch rois
-        :param corners: corner coordinates of charts: np.ndarray(n * 4, 2)
-        :return: np.ndarray(n * 36, 4), where n is the number of charts and
-        each row is in [x1, y1, x2, y2] format
+        Determine if the input image should be flipped and
+        sort charts by their luminance in descending order.
+        """
+        image = image / image.max()  # normalize to avoid overflow
+        assert charts_corners.shape[0] == 24, 'not enough annotated charts.'
+        chart_mean_values = []
+        for chart_id in range(6):
+            chart_corners = charts_corners[4 * chart_id: 4 * (chart_id + 1), :]
+            mask = np.zeros_like(image)
+            r, c = polygon(chart_corners[:, 1], chart_corners[:, 0])
+            mask[r, c, :] = 1
+            chart_mean_values.append((image * mask).sum() / mask.sum())
+
+        chart_mean_values = np.reshape(chart_mean_values, (2, 3))
+        if np.mean(chart_mean_values[:, 0]) < np.mean(chart_mean_values[:, 2]):
+            self.flip_x = True
+            print('Image will be horizontally flipped.')
+        if np.mean(chart_mean_values[0, :]) < np.mean(chart_mean_values[1, :]):
+            self.flip_y = True
+            print('Image will be vertically flipped.')
+
+        charts_corners = np.reshape(charts_corners, (2, 3, 4, 2))
+        if self.flip_x:
+            charts_corners = charts_corners[:, ::-1, ...]
+        if self.flip_y:
+            charts_corners = charts_corners[::-1, ...]
+
+        charts_corners = np.reshape(charts_corners, (-1, 2))
+
+        for chart_id in range(6):
+            charts_corners[4 * chart_id: 4 * (chart_id + 1), :] = self.sort_corners(
+                charts_corners[4 * chart_id: 4 * (chart_id + 1), :]
+            )
+
+        return charts_corners
+
+    def charts_to_rois(self, charts_corners):
+        """
+        Calculate box coordinates of all patches for all charts
+        :param charts_corners: np.ndarray(24, 2), coordinates of 24 corners in xy format
+        :return: Dict(patch_id: roi_box in xyxy format)
         """
         roi_boxes = []
-        for i in range(self.num_charts):
-            corners_cur_chart = corners[4 * i:4 * i + 4, :]
-            corners_cur_chart = correct_corners_order(corners_cur_chart)
-            # use perspective transform to get coordinates of patch centers
-            mat = cv2.getPerspectiveTransform(self.corners_ref, corners_cur_chart.astype(np.float32))
-            roi_centers_cur_chart = cv2.perspectiveTransform(self.roi_centers_ref, mat).squeeze()  # 36 * 2, [x, y]
-            roi_centers_3d = np.reshape(roi_centers_cur_chart, (6, 6, 2), order='f')
+        for chart_id in range(6):
+            chart_corners = charts_corners[4 * chart_id: 4 * (chart_id + 1), :].reshape(2, 2, 2)
+            if self.flip_x:
+                chart_corners = chart_corners[:, ::-1, :]
+            if self.flip_y:
+                chart_corners = chart_corners[::-1, ...]
+
+            # use perspective transform to get patch centers' coordinates
+            mat = cv2.getPerspectiveTransform(self.ref_chart_corners, chart_corners.reshape(-1, 2))
+            roi_centers = cv2.perspectiveTransform(self.ref_roi_centers, mat).squeeze()
+            roi_centers_3d = np.reshape(roi_centers, (6, 6, 2), order='f')
             patch_distance_x = np.min(np.abs(roi_centers_3d[:, 1:, 0] - roi_centers_3d[:, :-1, 0]))
             patch_distance_y = np.min(np.abs(roi_centers_3d[1:, :, 1] - roi_centers_3d[:-1, :, 1]))
             roi_radius_x = self.cfg.roi_to_patch_ratio * 0.5 * patch_distance_x
             roi_radius_y = self.cfg.roi_to_patch_ratio * 0.5 * patch_distance_y
-            roi_cur_chart = np.hstack([roi_centers_cur_chart[:, 0:1] - roi_radius_x,
-                                       roi_centers_cur_chart[:, 1:] - roi_radius_y,
-                                       roi_centers_cur_chart[:, 0:1] + roi_radius_x,
-                                       roi_centers_cur_chart[:, 1:] + roi_radius_y])
-            roi_boxes.append(roi_cur_chart)
+            roi_boxes.append(np.hstack([roi_centers[:, :1] - roi_radius_x,
+                                        roi_centers[:, 1:] - roi_radius_y,
+                                        roi_centers[:, :1] + roi_radius_x,
+                                        roi_centers[:, 1:] + roi_radius_y]))
 
-        return np.vstack(roi_boxes)
+        return {i: box for i, box in enumerate(np.concatenate(roi_boxes, axis=0))}
 
-    def sort_rois(self, image, roi_boxes):
+    @staticmethod
+    def extract_rois(image, roi_boxes):
         """
-        sort charts and patches in descending order by their average pixel intensities
+        Extract pixel values from one image given RoI coordinates
         :param image:
-        :param roi_boxes: np.ndarray(36 * n, 4), each row is in [x1, y1, x2, y2] format
-        :return: sorted boxes: dict(patch_id: np.ndarray(4,) or None)
+        :param roi_boxes: dict(patch_id: np.ndarray(4,)), box is in xyxy format
+        :return: dict(patch_id: roi)
         """
-        roi_means = []
-        for box in roi_boxes.astype(np.uint16):
-            roi = image[box[1]: box[3], box[0]: box[2], :]
-            roi_means.append(np.mean(roi))
+        rois = {}
+        for patch_id, box in roi_boxes.items():
+            box = box.astype(np.uint16)
+            roi = rgb2luminance(image[box[1]: box[3], box[0]: box[2], :])
+            rois[patch_id] = np.expand_dims(roi, axis=0)  # add a 'batch' dim
 
-        roi_means = np.reshape(roi_means, (6, 6, -1), order='f')  # (6, 6, n) tensor
-        # (6, 6) intensity matrix of intermediate luminance chart
-        mid_chart_roi_means = roi_means[:, :, self.num_charts // 2]
-        hflip = True if mid_chart_roi_means[:, 0].mean() < mid_chart_roi_means[:, -1].mean() else False
-        vflip = True if mid_chart_roi_means[0, :].mean() < mid_chart_roi_means[-1, :].mean() else False
-        roi_boxes = np.reshape(roi_boxes, (6, 6, -1, 4), order='f')
-        if hflip:
-            roi_boxes = roi_boxes[:, ::-1, :, :]
-        if vflip:
-            roi_boxes = roi_boxes[::-1, :, :, :]
-        # sort charts in descending order by their luminance levels
-        charts_indices = np.argsort(-np.mean(roi_means, axis=(0, 1)))
-        roi_boxes = roi_boxes[:, :, charts_indices, :]
-        roi_boxes = np.reshape(roi_boxes, (-1, 4), order='f')
-        roi_boxes_sorted = {}
-        box_id = 0
-        for i in range(216):
-            if (i // 36) in self.chart_ids:
-                roi_boxes_sorted[i] = roi_boxes[box_id, :]
-                box_id += 1
-            else:
-                roi_boxes_sorted[i] = None
-        return roi_boxes_sorted
+        return rois
 
-
-    def save_info(self, roi_boxes, metas, image_dir):
-        info = {'chart_ids': self.chart_ids,
-                'roi_boxes': roi_boxes,
-                'metas': metas}
-        timestamp = time.strftime('%Y-%m-%d-%H-%M')
-        save_path = os.path.join(image_dir, 'rois_info_{}.json'.format(timestamp))
+    @staticmethod
+    def save_rois(roi_boxes, save_dir):
+        save_path = op.join(save_dir, 'rois_info_{}.json'.format(time.strftime('%Y-%m-%d-%H-%M')))
         with open(save_path, 'w') as fp:
-            json.dump(info, fp, indent=4, cls=NumpyEncoder)
+            json.dump({'roi_boxes': roi_boxes}, fp, indent=4, cls=NumpyEncoder)
 
         print('Saved RoIs info to {}.'.format(save_path))
 
-    def load_history(self, image_dir):
-        rois_files = glob.glob(os.path.join(image_dir, '*.json'))
-        rois_files = [f for f in rois_files if 'rois_info_' in f]
-        if len(rois_files) == 0:
+    @staticmethod
+    def load_rois(load_dir):
+        load_paths = [f for f in glob(op.join(load_dir, '*.json')) if 'rois_info_' in f]
+        if len(load_paths) == 0:
             return None
-        with open(max(rois_files)) as fp:  # find the latest file if there are more than one
-            rois_info = json.load(fp)
 
-        assert rois_info['chart_ids'] == list(self.chart_ids), \
-            'Chart IDs changed. Delete historical files or use ignore_exist=True to override them.'
-        rois_info['roi_boxes'] = {
-            int(i): None if b is None else np.array(b) for i, b in rois_info['roi_boxes'].items()
-        }
+        with open(max(load_paths)) as fp:  # find the latest file if there are more than one
+            rois = json.load(fp)
+        roi_boxes = {int(i): np.array(b) for i, b in rois['roi_boxes'].items()}
 
-        print('Loaded historical RoI info from {}.'.format(max(rois_files)))
+        print('Loaded historical RoIs info from {}.'.format(max(load_paths)))
+        return roi_boxes
 
-        return rois_info
+    @staticmethod
+    def sort_corners(corners):
+        """
+        Sort corners of one chart to [lt, rt, lb, rb] order
+        :param corners: np.ndarray(4, 2), each row in xy format
+        :return: np.ndarray(4, 2) in sorted order
+        """
+        center = np.mean(corners, axis=0)
+        angles = np.arctan2(center[1] - corners[:, 1], corners[:, 0] - center[0])
+        idx_lb, idx_rb, idx_rt, idx_lt = np.argsort(angles)
+        return corners[(idx_lt, idx_rt, idx_lb, idx_rb), :]
 
-
-def correct_corners_order(corners):
-    """
-    reorder corners of square to [lt, rt, lb, rb] order
-    :param corners: np.array(4, 2), each row in [x, y] format
-    :return:
-    """
-    center = np.mean(corners, axis=0)
-    angles = np.arctan2(center[1] - corners[:, 1], corners[:, 0] - center[0]) * 180 / np.pi
-    idx_lb, idx_rb, idx_rt, idx_lt = np.argsort(angles)
-    return corners[[idx_lt, idx_rt, idx_lb, idx_rb], :]
-
-    
-def main():
-    cfg = load_config('utils/configurations/simulated_camera_24bit.cfg')
-    extractor = DTSRoIExtractor(cfg)
-    image_dir = r'/simulation/images'
-    rois = extractor.extract_images(image_dir)
-
-
-if __name__ == '__main__':
-    main()
+    @staticmethod
+    def check_images_variance(images):
+        # todo
+        pass

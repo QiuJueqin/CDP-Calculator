@@ -51,7 +51,7 @@ class CDPCalculator(object):
 
         input_contrasts, input_luminance, cdps = [], [], []
         for c in target_contrasts:
-            print('Calculating CDPs for input contrast {:.0f}%...'.format(100*c))
+            print('Calculating CDPs for input contrast {:.0f}%'.format(100*c))
             # find all input contrasts within a small range centering at the target contrast
             indices = np.where(
                 (self.paired_contrasts >= (1 - contrast_tol) * c) *
@@ -121,7 +121,7 @@ class CDPCalculator(object):
             else:
                 num_images = roi.shape[0]
 
-        print('{} luminance levels and {} images are used.'.format(
+        print('{} luminance levels and {} images are used'.format(
             sum(bool(_) for _ in self.dts_luminance.values()), num_images)
         )
 
@@ -149,7 +149,7 @@ class CDPCalculator(object):
                                               method=self.method)
 
         # generate all possible contrasts from RoI pairs
-        print('Generating {} RoI pairs...'.format(indices_b.size))
+        print('Generating {} RoI pairs. Keep patient'.format(indices_b.size))
         num_roi_pixels = int(np.sqrt(self.num_randomized_pixels))
         self.brighter_rois = tuple(
             np.random.choice(rois[i].ravel(), num_roi_pixels, replace=False) for i in indices_b

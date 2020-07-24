@@ -66,10 +66,10 @@ class SimulatedCamera(object):
 
         for i in range(frames):
             exp_cur_frame = exposure_time * brackets[i]
-            print('Taking {}/{} frame. Shutter speed: {:.0f}ms'.format(i + 1, frames, 1000 * exp_cur_frame))
+            print('{}/{} frame. Shutter speed: {:.0f}ms'.format(i + 1, frames, 1000 * exp_cur_frame))
             burst.append(self.capture(luminance_map, f_num=f_num, exposure_time=exp_cur_frame, iso=iso))
 
-        print('Blending {} frames into an HDR image.'.format(frames), end=' ')
+        print('Blending {} frames into an HDR image'.format(frames))
         burst = np.stack(burst, axis=2)  # np.ndarray(H, W, frames)
         non_saturation_indices = (burst <= 0.99 * self.max_digital_value)
         # if all frames are saturated, choose the one with fastest shutter speed (last frame)
@@ -81,7 +81,6 @@ class SimulatedCamera(object):
         ).astype(self.linear_dtype)  # normalization
 
         hdr_image = np.take_along_axis(burst, first_non_saturated_frame[:, :, None], axis=2).squeeze(2)
-        print('Done.')
 
         return hdr_image
 
