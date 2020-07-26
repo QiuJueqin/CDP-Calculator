@@ -35,7 +35,7 @@ def generate_dts_luminance(max_luminance=40000, max_reflectance=0.998, decay_fac
 
 def generate_dts_luminance_map(dts_luminance, ambient_luminance=1E-4, reflectance_std=0.001, image_size=(1280, 1920)):
     """
-    Generate luminance map with DTS chart patterns
+    Generate luminance map with CDP charts pattern
     :param dts_luminance: Dict(patch_id: luminance in cd/m^2)
     :param ambient_luminance: luminance of background in cd/m^2
     :param reflectance_std: perturbation caused by the non-uniformity of reflectance

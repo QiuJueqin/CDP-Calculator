@@ -1,5 +1,21 @@
+import os.path as op
+from types import SimpleNamespace
+
 import json
 import numpy as np
+
+
+def load_config(cfg_file):
+    """ Load configurations from a json and store them in a namespace """
+    assert op.isfile(cfg_file), 'configuration file {} not found.'.format(cfg_file)
+
+    config = SimpleNamespace()
+    with open(cfg_file) as fp:
+        cfg = json.load(fp)
+    for key, value in cfg.items():
+        setattr(config, key, value)
+
+    return config
 
 
 def rgb2luminance(rgb):

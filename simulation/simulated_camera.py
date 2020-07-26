@@ -1,42 +1,41 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from utils.config import load_config
+from utils.misc import load_config
 
 
 class SimulatedCamera(object):
     def __init__(self, cfg, noise_free=False):
         """
+        A simulated imaging system. See the methods for more details.
         :param cfg: a namespace that stores configs
         :param noise_free: set to True to make it a perfect noise-free camera
         """
         self.cfg = cfg
         self.noise_free = noise_free
 
-        self.luminous_efficacy = 1000
+        self.luminous_efficacy = 1000  # average value of human vision system's daytime and night seeing
         self.max_digital_value = 2 ** cfg.linear_bit_depth - 1
         self.linear_dtype = np.uint16 if cfg.linear_bit_depth <= 16 else np.uint32
         self.output_dtype = np.uint8 if cfg.output_bit_depth <= 8 else np.uint16
-        self.log_base = (cfg.linear_bit_depth * np.log(2)) / (2 ** cfg.output_bit_depth - 1)
 
         self.base_iso = None
         self.base_gain = None
         self.iso_calibration()
-        
+
     def capture(self, luminance_map, f_num=8, exposure_time=0.01, iso=100):
         """
         Simulated imaging process that converts luminance in the focal plane
-        to the output raw digital values in linear domain
+            to the output raw digital values in linear domain
         :param luminance_map: H*W luminance array in cd/m^2
         :param f_num: F number of the lens
         :param exposure_time: exposure time in second, aka shutter speed or
-        integration time
+            integration time
         :param iso: ISO speed
         :return: H*W image in linear domain
         """
         illuminance_map = self.optical_process(luminance_map, f_num)
         electrons_map = self.photoelectric_process(illuminance_map, exposure_time, noise_free=self.noise_free)
-
         raw_image = np.clip(
             (iso / self.base_iso) * self.base_gain * electrons_map, 0, self.max_digital_value
         ).astype(self.linear_dtype)
@@ -46,19 +45,21 @@ class SimulatedCamera(object):
     def capture_hdr(self, luminance_map, f_num=8, exposure_time=0.01, iso=100, frames=3, ev_step=1.):
         """
         Capture several frames with different exposure time and blend into an
-        HDR image. Here a simplified blending strategy is employed that the pixel
-        value in the blended HDR image is chosen and normalized from the frame
-        that has the highest non-saturated value, with no interpolation performed.
+            HDR image. Here a simplified blending strategy is employed that the
+            pixel value in the blended HDR image is chosen and normalized from
+            the frame that has the highest non-saturated value, with no
+            interpolation performed.
         :param luminance_map: same as self.capture
         :param f_num: same as self.capture
         :param exposure_time: the SHORTEST exposure time within bracket exposures.
-        For example, if wish to set the shutter time for 3 frames in a burst to
-        1s, 0.1s, and 0.01s respectively, then set exposure_time=0.01
+            For example, if wish to set the shutter time for 3 frames in a burst
+            to 1s, 0.1s, and 0.01s respectively, then set exposure_time=0.01
         :param iso: same as self.capture
         :param frames: number of frames in the burst
         :param ev_step: EV step between neighboring exposures, usually 1/3, 1/2,
-        1, 2, etc. For example, if exposure_time=0.1, frames=5, and ev_step=1/2,
-        the shutter speeds in the burst will be 0.4s, 0.28s, 0.2s, 0.14s and 0.1s
+            1, 2, etc. For example, if exposure_time=0.1, frames=5, and
+            ev_step=1/2, the shutter speeds in the burst will be 0.4s, 0.28s,
+            0.2s, 0.14s and 0.1s
         :return: H*W HDR image in linear domain
         """
         brackets = np.power(2., np.linspace((frames - 1) * ev_step, 0, frames))  # longest frame first
@@ -85,7 +86,13 @@ class SimulatedCamera(object):
         return hdr_image
 
     def tone_mapping(self, linear_image):
-        nonlinear_image = (np.log(linear_image + 1) / self.log_base).astype(self.output_dtype)
+        """ Use simple gamma function as global tone mapping """
+        max_tone_mapped_value = (2 ** self.cfg.output_bit_depth - 1)
+
+        nonlinear_image = (max_tone_mapped_value * np.power(
+            linear_image / self.max_digital_value, self.cfg.tone_mapping_gamma
+        )).astype(self.output_dtype)
+
         return nonlinear_image
 
     def iso_calibration(self):
@@ -109,7 +116,7 @@ class SimulatedCamera(object):
         )
         self.base_gain = self.max_digital_value / saturated_num_electrons
 
-    # ========== Simulated Optical-Electronic-Digital Processes ==========
+    # --------------- Simulated Optical-Electronic-Digital Processes ---------------
 
     def optical_process(self, luminance_map, f_num):
         """
@@ -142,6 +149,10 @@ class SimulatedCamera(object):
             electrons_map = poisson_mask * np.random.poisson(poisson_mask * electrons_map) + \
                 (1 - poisson_mask) * np.random.normal(electrons_map, np.sqrt(electrons_map))
 
+            thermal_noise = np.random.normal(0, self.cfg.thermal_noise_sigma,
+                                             size=electrons_map.shape)
+            electrons_map += thermal_noise
+
         return np.clip(electrons_map, 0, self.cfg.full_well_capacity)
 
 
@@ -171,7 +182,7 @@ def unit_test(cfg, inputs):
 
 
 def test():
-    cfg = load_config('../utils/configurations/simulated_camera_24bit.cfg')
+    cfg = load_config('../utils/configurations/simulated_camera_24bit.json')
 
     # luminance test
     inputs = {'luminance': np.linspace(0.01, 10000, 100),  # 0.01 to 10000 cd/m^2

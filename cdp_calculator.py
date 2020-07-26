@@ -10,8 +10,12 @@ EPSILON = 1E-9
 
 
 class CDPCalculator(object):
-    def __init__(self, dts_luminance, rois, method='michelson', num_samples=160000, fig_dir=''):
+    def __init__(self, dts_luminance, rois, method='michelson', num_samples=50000, fig_dir=''):
         """
+        Contrast Detection Probability Calculator. See
+        `https://www.imatest.com/docs/cdp/` and
+        `https://www.image-engineering.de/library/conference-papers/1045-contrast-
+        detection-probability-implementation-and-use-cases` for more details
         :param dts_luminance: dict(patch_id: float)
         :param rois: dict(patch_id: np.ndarray(h, w, 3) or none), where h and w are
             height and width of each RoI
@@ -36,7 +40,7 @@ class CDPCalculator(object):
 
         self.init()
 
-    def calculate(self, target_contrasts=(0.06, 0.1, 0.2, 0.35), confidence=0.5, contrast_tol=0.1):
+    def calculate(self, target_contrasts=(0.06, 0.1, 0.2, 0.3), confidence=0.5, contrast_tol=0.1):
         """
         Calculate CDPs w.r.t. luminance given target contrast value(s)
         :param target_contrasts: float or list, target contrast(s) for which the CDP
@@ -51,20 +55,25 @@ class CDPCalculator(object):
 
         input_contrasts, input_luminance, cdps = [], [], []
         for c in target_contrasts:
-            print('Calculating CDPs for input contrast {:.0f}%'.format(100*c))
+            print('Calculating CDPs for input contrast {:.0f}%:'.format(100*c), end=' ')
+
             # find all input contrasts within a small range centering at the target contrast
             indices = np.where(
                 (self.paired_contrasts >= (1 - contrast_tol) * c) *
                 (self.paired_contrasts <= (1 + contrast_tol) * c)
             )[0]
+
             if len(indices) == 0:
-                raise ValueError('RoI pair can not be found for the target contrast {}.'.format(c))
+                raise ValueError('No patch-pair can be found for the target contrast {}. '
+                                 'Try using a larger contrast_tol value.'.format(c))
+            else:
+                print('found {} patch-pairs'.format(len(indices)))
 
             input_contrasts.append([c] * indices.size)
             input_luminance.append(self.paired_luminance[indices])
-            for i in indices:
-                roi_contrasts = calc_contrast(self.inverse_transform(self.brighter_rois[i]),
-                                              self.inverse_transform(self.darker_rois[i]),
+            for i in tqdm.tqdm(indices):
+                roi_contrasts = calc_contrast(self.brighter_rois[i],
+                                              self.darker_rois[i],
                                               method=self.method,
                                               mode='pairwise')
                 p = sum(roi_contrasts < (1 + confidence) * c) - sum(roi_contrasts < (1 - confidence) * c)
@@ -94,8 +103,8 @@ class CDPCalculator(object):
 
         cdps = []
         for i, c in enumerate(tqdm.tqdm(self.paired_contrasts)):
-            roi_contrasts = calc_contrast(self.inverse_transform(self.brighter_rois[i]),
-                                          self.inverse_transform(self.darker_rois[i]),
+            roi_contrasts = calc_contrast(self.brighter_rois[i],
+                                          self.darker_rois[i],
                                           method=self.method,
                                           mode='pairwise')
             p = sum(roi_contrasts < (1 + confidence) * c) - sum(roi_contrasts < (1 - confidence) * c)
@@ -152,10 +161,10 @@ class CDPCalculator(object):
         print('Generating {} RoI pairs. Keep patient'.format(indices_b.size))
         num_roi_pixels = int(np.sqrt(self.num_randomized_pixels))
         self.brighter_rois = tuple(
-            np.random.choice(rois[i].ravel(), num_roi_pixels, replace=False) for i in indices_b
+            self.inverse_transform(np.random.choice(rois[i].ravel(), num_roi_pixels, replace=False)) for i in indices_b
         )
         self.darker_rois = tuple(
-            np.random.choice(rois[i].ravel(), num_roi_pixels, replace=False) for i in indices_d
+            self.inverse_transform(np.random.choice(rois[i].ravel(), num_roi_pixels, replace=False)) for i in indices_d
         )
 
     def inverse_transform(self, pixel_values):

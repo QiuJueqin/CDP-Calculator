@@ -15,6 +15,10 @@ from utils.misc import rgb2luminance, NumpyEncoder
 
 
 class DTSRoIExtractor(object):
+    """
+    A utility to allow user to manually annotate CDP pattern in the image(s)
+    and extract RoIs for further CDP calculation
+    """
     def __init__(self, cfg):
         self.cfg = cfg
 
@@ -25,7 +29,7 @@ class DTSRoIExtractor(object):
         else:
             self.dtype = np.uint32
 
-        # chart size and chart center coordinates in xy format, both relative to image size
+        # initial chart size and chart center coordinates in xy format, both relative to image size
         self.chart_size = 0.2
         self.chart_centers = np.array([[0.15, 0.2], [0.5, 0.2], [0.85, 0.2],
                                        [0.15, 0.8], [0.5, 0.8], [0.85, 0.8]])
@@ -42,7 +46,7 @@ class DTSRoIExtractor(object):
 
     def extract_images(self, image_dir, ignore_exist=False, ignore_variance_check=False):
         """
-        Extract RoIs from images with DTS patterns
+        Extract RoIs from images with dynamic_test_stand patterns
         :param image_dir: directory of images
         :param ignore_exist: force to ignore the existing RoIs files in the directory
             and re-run the chart selection procedure, otherwise, the program will
@@ -91,8 +95,8 @@ class DTSRoIExtractor(object):
         """
         Extract RoIs from one single image
         :param image:
-        :param roi_boxes: if None, user will be asked to manually select corners of 6
-            DTS charts in the image, otherwise, the selected RoI coordinates from the
+        :param roi_boxes: if None, user will be asked to manually annotate corners of 6
+            CDP charts in the image, otherwise, the selected RoI coordinates from the
             previous frame will be reused
         """
         if roi_boxes is None:
@@ -120,8 +124,7 @@ class DTSRoIExtractor(object):
 
     def annotate_charts(self, image):
         """
-        Ask user to manually select DTS charts by RIGHT clicking chart corners
-            (left clicking is kept for image zooming and dragging)
+        Ask user to manually select CDP charts by dragging chart corners
         :param image:
         :return: np.ndarray(24, 2), coordinates of 24 corners in xy format
         """
@@ -130,7 +133,7 @@ class DTSRoIExtractor(object):
         fig, ax = plt.subplots()
         plt.get_current_fig_manager().window.state('zoomed')
         ax.imshow(image.astype(np.float32) / image.max())
-        ax.set_title('Drag red corners to locate DTS charts. Close to continue.')
+        ax.set_title('Drag red corners to locate CDP charts. Close to continue.')
         chart_selectors = []
         for i in range(len(self.chart_centers)):
             chart_selectors.append(

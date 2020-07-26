@@ -1,0 +1,13 @@
+{
+  "wavelength": 550E-9,
+  "optical_transmission": 0.9,
+  "pixel_area": 1E-11,
+  "quantum_efficacy": 0.9,
+  "full_well_capacity": 30000,
+  "thermal_noise_sigma": 3,
+  "linear_bit_depth": 24,
+  "output_bit_depth": 16,
+  "roi_to_patch_ratio": 0.8,
+  "tone_mapping_gamma": 0.25,
+  "format": "tiff"
+} 

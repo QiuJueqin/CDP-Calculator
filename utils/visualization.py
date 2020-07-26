@@ -37,8 +37,8 @@ def plot_luminance(pixel_values, luminance, save_dir):
     ax.set_xscale('log')
     plt.xlabel('Luminance ($cd/m^2$)'), plt.ylabel('Pixel Value')
     if save_dir:
-        save_path = op.join(save_dir, 'luminance_vs_pixel_values.pdf')
-        plt.savefig(save_path, format='pdf')
+        save_path = op.join(save_dir, 'luminance_vs_pixel_values.png')
+        plt.savefig(save_path, dpi=200)
         plt.close(fig)
     else:
         plt.show()
@@ -64,8 +64,8 @@ def visualize_cdp_2d(input_contrast, input_luminance, cdps, save_dir):
         ax.set_xscale('log')
         ax.set_xlabel('Luminance ($cd/m^2$)'), ax.set_ylabel('CDP')
         if save_dir:
-            save_path = op.join(save_dir, 'cdp_contrast_{:.0f}%.pdf'.format(100*c))
-            plt.savefig(save_path, format='pdf')
+            save_path = op.join(save_dir, 'cdp_contrast_{:.0f}%.png'.format(100*c))
+            plt.savefig(save_path, dpi=200)
             plt.close(fig)
 
     ax0.set_xscale('log')
@@ -73,8 +73,8 @@ def visualize_cdp_2d(input_contrast, input_luminance, cdps, save_dir):
     fig0.legend(loc='upper left')
     if save_dir:
         contrasts_str = '_'.join(['{:.0f}%'.format(100*c) for c in sorted(np.unique(input_contrast))])
-        save_path = op.join(save_dir, 'cdp_contrasts_{}.pdf'.format(contrasts_str))
-        plt.savefig(save_path, format='pdf')
+        save_path = op.join(save_dir, 'cdp_contrasts_{}.png'.format(contrasts_str))
+        plt.savefig(save_path, dpi=200)
         plt.close(fig0)
         print('Saved figures to {}'.format(save_dir))
     else:
@@ -95,8 +95,8 @@ def visualize_cdp_3d(input_contrast, input_luminance, cdps, save_dir):
     ax.view_init(45, -40), plt.draw()
     ax.invert_xaxis()
     if save_dir:
-        save_path = op.join(save_dir, 'cdp_all.pdf')
-        plt.savefig(save_path, format='pdf')
+        save_path = op.join(save_dir, 'cdp_all.png')
+        plt.savefig(save_path, dpi=200)
         plt.close(fig)
 
     fig = plt.figure(figsize=(8, 6), dpi=150)
@@ -109,8 +109,8 @@ def visualize_cdp_3d(input_contrast, input_luminance, cdps, save_dir):
     ax.set_xlabel('Luminance (cd/m$^2$)'), ax.set_ylabel('Contrast')
     ax.set_ylim(0, 1)
     if save_dir:
-        save_path = op.join(save_dir, 'cdp_all_2d.pdf')
-        plt.savefig(save_path, format='pdf')
+        save_path = op.join(save_dir, 'cdp_all_2d.png')
+        plt.savefig(save_path, dpi=200)
         plt.close(fig)
         print('Saved figures to {}'.format(save_dir))
     else:
