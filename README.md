@@ -18,7 +18,7 @@ More detailed introduction and use cases about CDP can be found in [\[1\]](#ref1
 
 # Basic idea
 
-By its theoretical definition, CDP is the ratio of the area under a contrast-pdf (probability distribution function) curve, constrained by an upper and a lower bounds (<img src="https://render.githubusercontent.com/render/math?math=C_{in}\pm\epsilon">, where <img src="https://render.githubusercontent.com/render/math?math=C_{in}"> is the target contrast and <img src="https://render.githubusercontent.com/render/math?math=\epsilon"> is a confidence interval), to the whole area under this pdf curve (see Fig. 1). In a discrete digital imaging system, however, we can only obtain this ratio by dividing the number of observations withing the bounds by the number of all observations.
+By its theoretical definition, CDP is the ratio of the area under a contrast-to-pdf (probability distribution function) curve, constrained by an upper and a lower bounds (<img src="https://render.githubusercontent.com/render/math?math=C_{in}\pm\epsilon">, where <img src="https://render.githubusercontent.com/render/math?math=C_{in}"> is the target contrast and <img src="https://render.githubusercontent.com/render/math?math=\epsilon"> is a confidence interval), to the whole area under this pdf curve (see figure below). In a discrete digital imaging system, however, we can only obtain this ratio by dividing the number of observations withing the bounds by the number of all observations.
 
 
 <p align="center">
@@ -45,7 +45,7 @@ The [`CDPCalculator`](cdp_calculator.py#L12) class now supports two calculating 
 <p align="center">
 <img src="figures/cdp_contrasts.png" width="720px"/></p>
 
-<p align="center"><em>CDPs with respect to different luminance levels. Here four target contrasts (6%, 10%, 20%, and 30%) are evaluated</em><p align="center">
+<p align="center"><em>CDPs with respect to different luminance levels. Here four target contrasts (6%, 10%, 20%, and 30%) are evaluated. Two regions with CDP drops can be clearly observed because there exists <a href="https://gvv.mpi-inf.mpg.de/projects/opthdr/granados10_opthdr.pdf">SNR drop</a> during HDR blending</em><p align="center">
 
 
 * The all target contrasts mode is run by calling [`calculate_all()`](cdp_calculator.py#L93) method. In this mode the CDP values will be calculated for all possible patch-pairs. See figures below.  

@@ -13,7 +13,7 @@ from simulation.simulated_patterns import (generate_dts_luminance,
                                            generate_dts_luminance_map)
 
 from cdp_calculator import CDPCalculator
-from dynamic_test_stand.roi_extractor import DTSRoIExtractor
+from dts.roi_extractor import DTSRoIExtractor
 from utils.misc import load_config
 
 

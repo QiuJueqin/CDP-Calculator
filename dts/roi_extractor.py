@@ -46,7 +46,7 @@ class DTSRoIExtractor(object):
 
     def extract_images(self, image_dir, ignore_exist=False, ignore_variance_check=False):
         """
-        Extract RoIs from images with dynamic_test_stand patterns
+        Extract RoIs from images with dts patterns
         :param image_dir: directory of images
         :param ignore_exist: force to ignore the existing RoIs files in the directory
             and re-run the chart selection procedure, otherwise, the program will
