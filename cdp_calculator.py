@@ -122,19 +122,12 @@ class CDPCalculator(object):
     def init(self):
         """ Prepare transforming pixel values back to luminance domain,
             and generate all possible RoI pairs """
-        num_images = 0
-        # discard charts that not been annotated
-        for patch_id, roi in self.rois.items():
-            if roi is None:
-                self.dts_luminance[patch_id] = None
-            else:
-                num_images = roi.shape[0]
-
+        num_images = rois[0].shape[0]
         print('{} luminance levels and {} images are used'.format(
-            sum(bool(_) for _ in self.dts_luminance.values()), num_images)
+            len(self.dts_luminance), num_images)
         )
 
-        # interpolation
+        # prepare interpolation
         dts_luminance = np.array([v for v in self.dts_luminance.values() if v is not None])
         rois = [v for v in self.rois.values() if v is not None]
         mean_patch_values = np.array([np.mean(r) for r in rois])
@@ -157,15 +150,15 @@ class CDPCalculator(object):
                                               dts_luminance[indices_d],
                                               method=self.method)
 
-        # generate all possible contrasts from RoI pairs
+        # generate all possible RoI pairs and transform pixel values back to luminance domain
         print('Generating {} RoI pairs. Keep patient'.format(indices_b.size))
         num_roi_pixels = int(np.sqrt(self.num_randomized_pixels))
-        self.brighter_rois = tuple(
-            self.inverse_transform(np.random.choice(rois[i].ravel(), num_roi_pixels, replace=False)) for i in indices_b
-        )
-        self.darker_rois = tuple(
-            self.inverse_transform(np.random.choice(rois[i].ravel(), num_roi_pixels, replace=False)) for i in indices_d
-        )
+        self.brighter_rois = tuple(self.inverse_transform(
+            np.random.choice(rois[i].ravel(), num_roi_pixels, replace=False)
+            ) for i in indices_b)
+        self.darker_rois = tuple(self.inverse_transform(
+            np.random.choice(rois[i].ravel(), num_roi_pixels, replace=False)
+            ) for i in indices_d)
 
     def inverse_transform(self, pixel_values):
         """ Transform pixel values back to luminance domain """

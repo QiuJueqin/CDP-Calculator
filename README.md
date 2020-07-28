@@ -27,7 +27,14 @@ By its theoretical definition, CDP is the ratio of the area under a contrast-to-
 <p align="center"><em>CDP definition in <a href="#ref2">[2]</a></em><p align="center">
 
 
-Inspired by Image Engineering<sup>®</sup> [DTS-Evaluation software](https://www.image-engineering.de/content/products/solutions/dynamic_test_stand/downloads/Dynamic_Test_Stand_product_summary.pdf), this tool calculates CDP based on an RoI-to-RoI manner, i.e., given two flatten patches with known contrast and luminance levels (in cd/m<sup>2</sup>), the CDP is calculated by counting the number of pixel-pairs from two image RoIs that are able to reproduce that contrast value, then dividing by the number of all possible pixel-pairs.
+Inspired by Image Engineering<sup>®</sup> [DTS-Evaluation software](https://www.image-engineering.de/content/products/solutions/dynamic_test_stand/downloads/Dynamic_Test_Stand_product_summary.pdf), this tool calculates CDP based on an RoI-to-RoI manner (see figure below), i.e., given two flatten patches with known contrast and luminance levels (in cd/m<sup>2</sup>), the CDP is calculated by counting the number of pixel-pairs from two image RoIs that are able to reproduce that contrast value, then dividing by the number of all possible pixel-pairs.
+
+
+<p align="center">
+<img src="figures/roi-to-roi.png" width="640px"/></p>
+
+<p align="center"><em>We calculate CDP based on an RoI-to-RoI manner. The figure is copied from <a href="#ref5">[5]</a>, and more appropriately, the y-label should be "the normalized frequency"</em><p align="center">
+
 
 For example, given two neutral patches in the physical world with luminance 100cd/m<sup>2</sup> and 300cd/m<sup>2</sup> respectively, their contrast is <img src="https://render.githubusercontent.com/render/math?math=\frac{300-100}{300%2B100}=0.5"> following the Michelson contrast definition. Suppose we use a camera to capture this scene, and get an output image with two 10*10 square RoIs corresponding to these two patches, then the CDP can be obtained by counting the ratio of all pixel-pairs that reproduce the target contrast (based on pixel values), to the total 100<sup>2</sup>=10,000 pixel-pairs.
 
@@ -43,9 +50,9 @@ The [`CDPCalculator`](cdp_calculator.py#L12) class now supports two calculating 
 
 
 <p align="center">
-<img src="figures/cdp_contrasts.png" width="720px"/></p>
+<img src="figures/cdp_contrasts.png" width="680px"/></p>
 
-<p align="center"><em>CDPs with respect to different luminance levels. Here four target contrasts (6%, 10%, 20%, and 30%) are evaluated. Two regions with CDP drops can be clearly observed because there exists <a href="https://gvv.mpi-inf.mpg.de/projects/opthdr/granados10_opthdr.pdf">SNR drop</a> during HDR blending</em><p align="center">
+<p align="center"><em>CDPs with respect to different luminance levels. Here four target contrasts (6%, 10%, 20%, and 30%) are evaluated. Two regions with CDP drops in the middle can be clearly observed because there exists <a href="https://gvv.mpi-inf.mpg.de/projects/opthdr/granados10_opthdr.pdf">SNR drop</a> during HDR blending. The right side drop is caused by the response saturation</em><p align="center">
 
 
 * The all target contrasts mode is run by calling [`calculate_all()`](cdp_calculator.py#L93) method. In this mode the CDP values will be calculated for all possible patch-pairs. See figures below.  
@@ -62,6 +69,8 @@ The [`CDPCalculator`](cdp_calculator.py#L12) class now supports two calculating 
 
 <p align="center"><em>Same as above figure, in top view</em><p align="center">
 
+See the documents in the [`cdp_calculator.py`](cdp_calculator.py) for more info about its usage.
+
 
 ### Simulated Imaging System & DTS RoIs Extractor
 
@@ -70,11 +79,19 @@ TODO
 
 # Reference
 
-<a name="ref1">\[1\]</a> Detection Probabilities: Performance Prediction for Sensors of Autonomous Vehicles. Geese M, Seger U, and Paolillo A (2018)
+<a name="ref1">1.</a> Detection Probabilities: Performance Prediction for Sensors of Autonomous Vehicles. Geese M, Seger U, and Paolillo A (2018)
 
-<a name="ref2">\[2\]</a> Contrast Detection Probability - Implementation and Use Cases. Artmann U, Geese M, Gäde M (2019)
+<a name="ref2">2.</a> Contrast Detection Probability - Implementation and Use Cases. Artmann U, Geese M, Gäde M (2019)
 
-<a name="ref3">\[3\]</a> Imatest Documentation: Contrast Detection Probability. https://www.imatest.com/docs/cdp/
+<a name="ref3">3.</a> Imatest Documentation: Contrast Detection Probability. https://www.imatest.com/docs/cdp/
+
+<a name="ref4">4.</a> ISO 12232:2019 Photography — Digital still cameras — Determination of exposure index, ISO speed ratings, standard output sensitivity, and recommended exposure index
+
+<a name="ref5">5.</a> Comparison of Detectability Index and Contrast Detection
+Probability. Robin B. Jenkin (2019)
+
+<a name="ref6">6.</a> Implementierung von CDP: Entwicklung eines Programmiercodes in Python zur Untersuchung und Messung von CDP bei Fahrerassistenzkameras. Lukas Ebbert (2018)
+
 
 
 # License
