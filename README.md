@@ -3,7 +3,7 @@
 
 This repository provides:
 
-* A tool for calculating [contrast detection probability](https://www.image-engineering.de/content/library/conference_papers/2019_02_28/EIC2019_CDP.pdf) (CDP) of an imaging system
+* A toolbox for calculating [contrast detection probability](https://www.image-engineering.de/content/library/conference_papers/2019_02_28/EIC2019_CDP.pdf) (CDP) of an imaging system
 
 * A simulated imaging system for generating HDR images given scene luminance map, and alternatively
 
@@ -27,11 +27,11 @@ By its theoretical definition, CDP is the ratio of the area under a contrast-to-
 <p align="center"><em>CDP definition in <a href="#ref2">[2]</a></em><p align="center">
 
 
-Inspired by Image Engineering<sup>®</sup> [DTS-Evaluation software](https://www.image-engineering.de/content/products/solutions/dynamic_test_stand/downloads/Dynamic_Test_Stand_product_summary.pdf), this tool calculates CDP based on an RoI-to-RoI manner (see figure below), i.e., given two flatten patches with known contrast and luminance levels (in cd/m<sup>2</sup>), the CDP is calculated by counting the number of pixel-pairs from two image RoIs that are able to reproduce that contrast value, then dividing by the number of all possible pixel-pairs.
+Inspired by Image Engineering<sup>®</sup> [DTS-Evaluation software](https://www.image-engineering.de/content/products/solutions/dynamic_test_stand/downloads/Dynamic_Test_Stand_product_summary.pdf), our toolbox calculates CDP based on an RoI-to-RoI manner (see figure below), i.e., given two flatten patches with known contrast and luminance levels (in cd/m<sup>2</sup>), the CDP is calculated by counting the number of pixel-pairs from two image RoIs that are able to reproduce that contrast value, then dividing by the number of all possible pixel-pairs.
 
 
 <p align="center">
-<img src="figures/roi-to-roi.png" width="640px"/></p>
+<img src="figures/roi-to-roi.png" width="480px"/></p>
 
 <p align="center"><em>We calculate CDP based on an RoI-to-RoI manner. The figure is copied from <a href="#ref5">[5]</a>, and more appropriately, the y-label should be "the normalized frequency"</em><p align="center">
 
@@ -42,15 +42,26 @@ A CDP value is a function of the target contrast value, the target luminance lev
 
 # Usage
 
+### Demo
+
+A comprehensive demo was provided, simply by running 
+
+```bash
+python demo.py
+``` 
+
+and annotating the CDP charts following the instructions, you will get results on the `./simulation/simulated_images` directory.
+
+
 ### CDP Calculator
 
-The [`CDPCalculator`](cdp_calculator.py#L12) class now supports two calculating mode: *user-specified target contrast(s) mode* and *all target contrasts mode*:
+The [`CDPCalculator`](cdp_calculator.py#L12) class now supports two calculating modes: *user-specified target contrast(s) mode* and *all target contrasts mode*:
 
 * The user-specified target contrast(s) mode is run by calling [`calculate()`](cdp_calculator.py#L43) method. Given a set of patches with known luminance levels and an interesting target contrast value (or several contrast values), this method will search from all patch-pairs and find those that satisfy this target contrast value(s). The CDP values will be calculated for all these patch-pairs. See figure below.  
 
 
 <p align="center">
-<img src="figures/cdp_contrasts.png" width="680px"/></p>
+<img src="figures/cdp_contrasts.png" width="580px"/></p>
 
 <p align="center"><em>CDPs with respect to different luminance levels. Here four target contrasts (6%, 10%, 20%, and 30%) are evaluated. Two regions with CDP drops in the middle can be clearly observed because there exists <a href="https://gvv.mpi-inf.mpg.de/projects/opthdr/granados10_opthdr.pdf">SNR drop</a> during HDR blending. The right side drop is caused by the response saturation</em><p align="center">
 
@@ -58,23 +69,39 @@ The [`CDPCalculator`](cdp_calculator.py#L12) class now supports two calculating 
 * The all target contrasts mode is run by calling [`calculate_all()`](cdp_calculator.py#L93) method. In this mode the CDP values will be calculated for all possible patch-pairs. See figures below.  
 
 
-<p align="center">
-<img src="figures/cdp_all.png" width="720px"/></p>
+<p align="center"><img src="figures/cdp_all.png" width="720px"/></p>
 
 <p align="center"><em>CDPs with respect to different target contrasts and luminance levels</em><p align="center">
 
 
-<p align="center">
-<img src="figures/cdp_all_2d.png" width="580px"/></p>
+<p align="center"><img src="figures/cdp_all_2d.png" width="580px"/></p>
 
 <p align="center"><em>Same as above figure, in top view</em><p align="center">
 
-See the documents in the [`cdp_calculator.py`](cdp_calculator.py) for more info about its usage.
+See the documents in the [cdp_calculator.py](cdp_calculator.py) for more info about its usage.
 
 
 ### Simulated Imaging System & DTS RoIs Extractor
 
-TODO
+If you do not own a DTS device, this toolbox provides a [simulated CDP pattern generator](simulation/simulated_patterns.py#L36) and a [simulated imaging system](simulation/simulated_camera.py#L7) to help generate synthetic images. See figure below.
+
+
+<p align="center"><img src="figures/simulated_image.png" width="540px"/></p>
+
+<p align="center"><em>Synthetic HDR image of CDP pattern generated by <a href="simulation/simulated_camera.py#L45">capture_hdr()</a></em><p align="center">
+
+
+A convenient utility is also provided for users to annotate and extract RoIs from real or synthetic CDP images. See figures below.
+
+
+<p align="center"><img src="figures/rois_extractor.png" width="600px"/></p>
+
+<p align="center"><em>RoIs extractor</em><p align="center">
+
+
+<p align="center"><img src="figures/rois.png" width="600px"/></p>
+
+<p align="center"><em>Extracted RoIs</em><p align="center">
 
 
 # Reference

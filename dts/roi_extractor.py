@@ -1,11 +1,11 @@
 import os.path as op
 import time
 import json
-from glob import glob
+import glob
 
 import numpy as np
-import cv2
 import tifffile
+import cv2
 import matplotlib.pyplot as plt
 import skimage.io
 from skimage.draw import polygon
@@ -59,7 +59,7 @@ class DTSRoIExtractor(object):
         :return: dict(patch_id: roi)
         """
         roi_boxes, rois = None, None
-        image_paths = glob(op.join(image_dir, '*.{}'.format(self.cfg.format)))
+        image_paths = glob.glob(op.join(image_dir, '*.{}'.format(self.cfg.format)))
 
         # check if there exists a historical RoIs info file
         exists = False
@@ -243,7 +243,7 @@ class DTSRoIExtractor(object):
 
     @staticmethod
     def load_rois(load_dir):
-        load_paths = [f for f in glob(op.join(load_dir, '*.json')) if 'rois_info_' in f]
+        load_paths = [f for f in glob.glob(op.join(load_dir, '*.json')) if 'rois_info_' in f]
         if len(load_paths) == 0:
             return None
 

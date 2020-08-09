@@ -9,16 +9,14 @@ import os
 import tifffile
 
 from simulation.simulated_camera import SimulatedCamera
-from simulation.simulated_patterns import (generate_dts_luminance,
-                                           generate_dts_luminance_map)
-
+from simulation.simulated_patterns import generate_dts_luminance, generate_dts_luminance_map
 from cdp_calculator import CDPCalculator
 from dts.roi_extractor import DTSRoIExtractor
 from utils.misc import load_config
 
 
 MAX_LUMINANCE = 50000  # luminance of the light source, in cd/m^2
-NUM_IMAGES = 4  # capturing several frames will produce more accurate results
+NUM_IMAGES = 3  # capturing several frames will produce more accurate results
 
 # load the configuration of the simulated camera
 cfg = load_config('./utils/configurations/simulated_camera_24bit.json')

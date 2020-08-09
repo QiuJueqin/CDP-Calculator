@@ -1,6 +1,7 @@
 import tqdm
 import numpy as np
 from scipy.interpolate import interp1d
+
 from utils.contrast_metrics import calc_contrast
 from utils.visualization import (plot_luminance,
                                  visualize_cdp_2d,
@@ -122,7 +123,7 @@ class CDPCalculator(object):
     def init(self):
         """ Prepare transforming pixel values back to luminance domain,
             and generate all possible RoI pairs """
-        num_images = rois[0].shape[0]
+        num_images = self.rois[0].shape[0]
         print('{} luminance levels and {} images are used'.format(
             len(self.dts_luminance), num_images)
         )

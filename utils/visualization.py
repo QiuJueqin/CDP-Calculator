@@ -21,8 +21,8 @@ def plot_rois(image, roi_boxes):
         if box is None:
             continue
         ax.add_patch(Rectangle((box[0], box[1]), box[2] - box[0], box[3] - box[1],
-                               fc='None', ec='k', lw=1))
-        plt.text((box[0] + box[2]) // 2, (box[1] + box[3]) // 2, str(patch_id),
+                               fc='None', ec='#5F7982', lw=1))
+        plt.text((box[0] + box[2]) // 2, (box[1] + box[3]) // 2, str(patch_id), color='#5F7982',
                  horizontalalignment='center', verticalalignment='center'
                  )
     plt.show()
